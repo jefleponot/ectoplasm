@@ -5,9 +5,9 @@ This extension runs **PhantomJS script** into you browser. Its goal is to captur
 
 My inspiration comes from Resurrectio, Selenium Builder, GhostInspector, Selenium ...
 
-https://github.com/ebrehault/resurrectio
-https://github.com/SeleniumBuilder/selenium-builder
-https://ghostinspector.com/
-http://docs.seleniumhq.org/
+- https://github.com/ebrehault/resurrectio
+- https://github.com/SeleniumBuilder/selenium-builder
+- https://ghostinspector.com/
+- http://docs.seleniumhq.org/
 
 Have a try !!!
