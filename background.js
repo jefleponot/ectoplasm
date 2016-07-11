@@ -694,21 +694,39 @@ Page.prototype.renderBuffer = function renderBuffer(options) {
  * @param Object options {format, quality}
  * @return Page
  */
-Page.prototype.sendEvent = function sendEvent(options) {
-    page.evaluate(function(){
-        try {
-            var elem = document.elementFromPoint(10,10);
-            var evt = document.createEvent("MouseEvents");
-            var center_x = 10, center_y = 10;
-            evt.initMouseEvent("click", true, true, window, 0, 0, 0, center_x, center_y, false, false, false, false, 0, elem);
-            //document.getElementById("bandeau").dispatchEvent(evt);
-            elem.dispatchEvent(evt);
-            return true;
-        } catch (e) {
-            alert("Failed dispatching " + type + "mouse event on " + selector + ": " + e, "error");
-            return false;
+Page.prototype.sendEvent = function sendEvent() {
+    var page = this;
+    var args = arguments.length === 1 ? [arguments[0]] : Array.apply(null, arguments);
+    var mouseEvents = ['mouseup', 'mousedown', 'mousemove', 'doubleclick', 'click'];
+    if (mouseEvents.indexOf(args[0]) !== -1) {
+        var mouseX = 0, mouseY = 0, button = 'left';
+        var codesButton = {'left': 0, 'right': 2, 'middle': 1};
+        var codeButton = 0;
+        if ((args.length === 2) && (Object.keys(codesButton).indexOf(args[1]) !== -1)) {
+            button = args[1];
+        } else if ((args.length === 4) && (Object.keys(codesButton).indexOf(args[3]) !== -1))  {
+            button = args[3];
         }
-    });
+        codeButton = codesButton[button];
+        
+        if (args.length >= 3) {
+            mouseX = parseInt(args[1], 10) || 1;
+            mouseY = parseInt(args[2], 10) || 1;
+        } 
+console.log('alors');
+        page.evaluate(function(mouseEventType, mouseX, mouseY, button){
+            try {
+                var evt = document.createEvent("MouseEvents");
+                var elm = document.elementFromPoint(mouseX, mouseY);
+                evt.initMouseEvent(mouseEventType, true, true, window, 1, 1, 1, 1, 1, false, false, false, false, button, elm);
+                elm.dispatchEvent(evt);
+                return true;
+            } catch (e) {
+                console.log("Failed dispatching " + mouseEventType + ": " + e, "error");
+                return false;
+            }
+        }, args[0], mouseX, mouseY, codeButton);
+    }
 };
 
 /**

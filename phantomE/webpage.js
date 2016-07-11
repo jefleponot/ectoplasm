@@ -342,7 +342,25 @@ function quoteString(str) {
     return o + '"';
 }
 
-
+// Inspired by Douglas Crockford's remedies: a better Type Detection.
+// @see http://javascript.crockford.com/remedial.html
+function detectType(value) {
+    var s = typeof value;
+    if (s === 'object') {
+        if (value) {
+            if (value instanceof Array) {
+                s = 'array';
+            } else if (value instanceof RegExp) {
+                s = 'regexp';
+            } else if (value instanceof Date) {
+                s = 'date';
+            }
+        } else {
+            s = 'null';
+        }
+    }
+    return s;
+}
 
 function decorateNewPage(opts, page) {
     var handlers = {};
