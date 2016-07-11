@@ -89,146 +89,6 @@ function copyInto(target, source) {
     return target;
 }
 
-function runCB(page, callback, params) {
-        if (typeof page[callback] == "function"){
-                console.log('runCB : '+callback);
-                return page[callback].apply(page,params);
-        }
-        return null;
-}
-
-
-    var networkRequest = {
-        "ret" : {},
-        "abort": function () {
-                this.ret.cancel = true;
-        },
-        "changeUrl" : function (newUrl) {
-                this.ret.redirectUrl = newUrl;
-        }
-    };
-    
-    
-function eventsPage(page){
-
-
-    chrome.webRequest.onBeforeSendHeaders.addListener(function (details) {
-        details.id =  details.requestId;
-        details.time =  new Date(details.timeStamp); 
-        details.headers =  details.requestHeaders;
-        delete details.requestId;
-        delete details.timeStamp;
-        delete details.requestHeaders;
-        runCB(page, 'onResourceRequested', [details, networkRequest]);
-        return networkRequest.ret;
-        },{urls : ["http://*/*", "https://*/*"]},["requestHeaders"]
-    );
-    
-    chrome.webRequest.onHeadersReceived.addListener(function (details) {
-        details.id =  details.requestId;
-        details.time =  new Date(details.timeStamp); 
-        details.headers =  details.responseHeaders;
-        details.contentType = details.type;
-        details.status =  details.statusCode;
-        details.statusText = details.statusLine;
-        details.stage = "start";
-        delete details.requestId;
-        delete details.timeStamp;
-        delete details.responseHeaders;
-        delete details.statusCode;
-        delete details.statusLine;
-        runCB(page, 'onResourceReceived', [details]);
-        },{urls : ["http://*/*", "https://*/*"]},["responseHeaders"]
-    );
-
-
-    chrome.webRequest.onCompleted.addListener(function (details) {
-        details.id =  details.requestId;
-        details.time =  new Date(details.timeStamp); 
-        details.headers =  details.responseHeaders;
-        details.status =  details.statusCode;
-        details.statusText = details.statusLine;
-        details.contentType = details.type;
-        details.stage = "end";
-        delete details.requestId;
-        delete details.timeStamp;
-        delete details.responseHeaders;
-        delete details.statusCode;
-        delete details.statusLine;
-        runCB(page, 'onResourceReceived', [details]);
-        },{urls : ["http://*/*", "https://*/*"]},["responseHeaders"]
-    );
-    /*
-    id : the number of the requested resource
-    url : the URL of the requested resource
-    time : Date object containing the date of the response
-    headers : list of http headers
-    bodySize : size of the received content decompressed (entire content or chunk content)
-    contentType : the content type if specified
-    redirectURL : if there is a redirection, the redirected URL
-    stage : “start”, “end” (FIXME: other value for intermediate chunk?)
-    status : http status code. ex: 200
-    statusText : http status text. ex: OK
-*/
-    
-    chrome.tabs.onUpdated.addListener(function callback( tabId, changeInfo, tab) { 
-        if (tab.id !== page.id) return;
-        
-        //console.log(JSON.stringify(changeInfo));
-        //console.log(JSON.stringify(tab,null,4));
-        page.id = tabId;
-        if (tab.title) {
-                page.title = tab.title;
-        }
-        if (tab.url) {
-                page.url = tab.url;
-        }
-      
-        if (changeInfo.status && changeInfo.status ==  "loading" && tab.url !== "about:blank") {
-            runCB(page, 'onLoadStarted', []);
-        }
-        
-        console.log('HELLO 2 '+changeInfo.status+ "  "+tab.url+"  "+tab.title);
-        //onLoadFinished                     
-        if (changeInfo.status && changeInfo.status ==  "complete" && tab.url !== "about:blank"){
-                console.log('-------> GO');
-                page.status = "success";
-                page.scrollPosition = { top: 0,  left: 0 };
-                page.viewportSize = { width: tab.width, height: tab.height };
-                console.log('-------> GO 1');
-                /*
-                chrome.tabs.detectLanguage(tab.id, function callback(language){
-                    page.language = language;
-                });
-                */
-                chrome.tabs.executeScript (tab.id,{"code":"window.frames.length"},function(ret){
-                    
-                    page.framesCount = ret;
-                    console.log(page.framesCount);
-                    
-function logFrameInfo(framesInfo) {
-  for (var i = 0; i < framesInfo.length; i++) {
-    console.log("==>"+JSON.stringify(framesInfo[i],null,4));
-  }
-}
-chrome.webNavigation.getAllFrames({tabId: page.id}, logFrameInfo);
-
-                    if (ret !== 0) {
-                        chrome.tabs.executeScript (tab.id,{"code":"[].map.call(window.frames,function(elm){return elm.name;})"},function(ret){
-                                page.framesName = ret;
-                                console.log(page.framesName);
-                                runCB(page, '_onPageOpenFinished', ['success']);
-                                runCB(page, 'onLoadFinished', ['success']);
-                        });
-                    } else {
-                        runCB(page, '_onPageOpenFinished', ['success']);
-                        runCB(page, 'onLoadFinished', ['success']);
-                    }
-                });
-            }
-        });
-}
-
 function definePageSignalHandler(page, handlers, handlerName, signalName) {
     Object.defineProperty(page, handlerName, {
         set: function (f) {
@@ -247,7 +107,7 @@ function definePageSignalHandler(page, handlers, handlerName, signalName) {
                 // Store the new handler for reference
                 handlers[handlerName] = {
                     callback: f
-                };
+                }
                 this[signalName].connect(f);
             }
         },
@@ -364,7 +224,7 @@ function detectType(value) {
 
 function decorateNewPage(opts, page) {
     var handlers = {};
-/*
+
     try {
         page.rawPageCreated.connect(function(newPage) {
             // Decorate the new raw page appropriately
@@ -378,12 +238,13 @@ function decorateNewPage(opts, page) {
     } catch (e) {}
 
     // deep copy
+    console.log(Object.keys(phantom).join('-'));
     page.settings = JSON.parse(JSON.stringify(phantom.defaultPageSettings));
 
     definePageSignalHandler(page, handlers, "onInitialized", "initialized");
-*/
+
     definePageSignalHandler(page, handlers, "onLoadStarted", "loadStarted");
-/*
+
     definePageSignalHandler(page, handlers, "onLoadFinished", "loadFinished");
 
     definePageSignalHandler(page, handlers, "onUrlChanged", "urlChanged");
@@ -391,11 +252,11 @@ function decorateNewPage(opts, page) {
     definePageSignalHandler(page, handlers, "onNavigationRequested", "navigationRequested");
 
     definePageSignalHandler(page, handlers, "onRepaintRequested", "repaintRequested");
-*/
+
     definePageSignalHandler(page, handlers, "onResourceRequested", "resourceRequested");
 
     definePageSignalHandler(page, handlers, "onResourceReceived", "resourceReceived");
-/*
+
     definePageSignalHandler(page, handlers, "onResourceError", "resourceError");
 
     definePageSignalHandler(page, handlers, "onResourceTimeout", "resourceTimeout");
@@ -405,22 +266,17 @@ function decorateNewPage(opts, page) {
     definePageSignalHandler(page, handlers, "onConsoleMessage", "javaScriptConsoleMessageSent");
 
     definePageSignalHandler(page, handlers, "onClosing", "closing");
-*/
+
     // Private callback for "page.open()"
     definePageSignalHandler(page, handlers, "_onPageOpenFinished", "loadFinished");
-/*
+
     phantom.__defineErrorSignalHandler__(page, page, handlers);
 
-page.onError = phantom.defaultErrorHandler;
-*/
+    //page.onError = phantom.defaultErrorHandler;
 
-    /**
-     * evaluate a function in the page
-     * @param   {str}  str    a script text     
-     * @return  {*}    the script result
-     */            
     page.open = function (url, arg1, arg2, arg3, arg4) {
         var thisPage = this;
+
         if (arguments.length === 1) {
             this.openUrl(url, 'get', this.settings);
             return;
@@ -428,7 +284,7 @@ page.onError = phantom.defaultErrorHandler;
             this._onPageOpenFinished = function() {
                 thisPage._onPageOpenFinished = null; //< Disconnect callback (should fire only once)
                 arg1.apply(thisPage, arguments);     //< Invoke the actual callback
-            };
+            }
             this.openUrl(url, 'get', this.settings);
             return;
         } else if (arguments.length === 2) {
@@ -438,7 +294,7 @@ page.onError = phantom.defaultErrorHandler;
             this._onPageOpenFinished = function() {
                 thisPage._onPageOpenFinished = null; //< Disconnect callback (should fire only once)
                 arg2.apply(thisPage, arguments);     //< Invoke the actual callback
-            };
+            }
             this.openUrl(url, arg1, this.settings);
             return;
         } else if (arguments.length === 3) {
@@ -451,7 +307,7 @@ page.onError = phantom.defaultErrorHandler;
             this._onPageOpenFinished = function() {
                 thisPage._onPageOpenFinished = null; //< Disconnect callback (should fire only once)
                 arg3.apply(thisPage, arguments);     //< Invoke the actual callback
-            };
+            }
             this.openUrl(url, {
                 operation: arg1,
                 data: arg2
@@ -461,7 +317,7 @@ page.onError = phantom.defaultErrorHandler;
             this._onPageOpenFinished = function() {
                 thisPage._onPageOpenFinished = null; //< Disconnect callback (should fire only once)
                 arg4.apply(thisPage, arguments);     //< Invoke the actual callback
-            };
+            }
             this.openUrl(url, {
                 operation: arg1,
                 data: arg2,
@@ -471,26 +327,15 @@ page.onError = phantom.defaultErrorHandler;
         }
         throw "Wrong use of WebPage#open";
     };
-    
+
     /**
      * Include an external JavaScript file and notify when done.
      * @param scriptUrl URL to the Script to include
      * @param onScriptLoaded If provided, this call back is executed when the inclusion is done
      */
     page.includeJs = function (scriptUrl, onScriptLoaded) {
-        chrome.tabs.executeScript (page.tab.id,{"file":scriptUrl,"allFrames":page.allFrames},function(rets){
-            if (typeof onScriptLoaded !== "undefined"){
-                page.evaluate(onScriptLoaded);
-            }
-        });
-        return true;
-    };
-    
-    /*
-    page.includeJs = function (scriptUrl, onScriptLoaded) {
         // Register temporary signal handler for 'alert()'
-        var self = this;
-        function alertCallback (msgFromAlert) {
+        this.javaScriptAlertSent.connect(function (msgFromAlert) {
             if (msgFromAlert === scriptUrl) {
                 // Resource loaded, time to fire the callback (if any)
                 if (onScriptLoaded && typeof(onScriptLoaded) === "function") {
@@ -498,15 +343,14 @@ page.onError = phantom.defaultErrorHandler;
                 }
                 // And disconnect the signal handler
                 try {
-                    self.javaScriptAlertSent.disconnect(alertCallback);
+                    this.javaScriptAlertSent.disconnect(arguments.callee);
                 } catch (e) {}
             }
-        }
-        self.javaScriptAlertSent.connect(alertCallback);
+        });
 
         // Append the script tag to the body
-        self._appendScriptElement(scriptUrl);
-    };*/
+        this._appendScriptElement(scriptUrl);
+    };
 
     /**
      * evaluate a function in the page
@@ -516,13 +360,10 @@ page.onError = phantom.defaultErrorHandler;
      */
     page.evaluate = function (func, args) {
         var str, arg, argType, i, l;
-        var callback = null;
         if (!(func instanceof Function || typeof func === 'string' || func instanceof String)) {
             throw "Wrong use of WebPage#evaluate";
         }
-        //str = 'function() { return (' + func.toString() + ')(';
-        str = '(' + func.toString() + ')(';
-        if (page.allFrames) str = str.replace(/{/,"{\nif (!(window.phantom)) return;\n");
+        str = 'function() { return (' + func.toString() + ')(';
         for (i = 1, l = arguments.length; i < l; i++) {
             arg = arguments[i];
             argType = detectType(arg);
@@ -530,25 +371,21 @@ page.onError = phantom.defaultErrorHandler;
             switch (argType) {
             case "object":      //< for type "object"
             case "array":       //< for type "array"
-                str += JSON.stringify(arg) + ",";
+                str += JSON.stringify(arg) + ","
                 break;
             case "date":        //< for type "date"
-                str += "new Date(" + JSON.stringify(arg) + "),";
+                str += "new Date(" + JSON.stringify(arg) + "),"
                 break;
             case "string":      //< for type "string"
                 str += quoteString(arg) + ',';
-                break;
-            case "function":
-                    callback = arg;
                 break;
             default:            // for types: "null", "number", "function", "regexp", "undefined"
                 str += arg + ',';
                 break;
             }
         }
-        //str = str.replace(/,$/, '') + '); }';
-        str = str.replace(/,$/, '') + ');';
-        return this.evaluateJavaScript(str,callback);
+        str = str.replace(/,$/, '') + '); }';
+        return this.evaluateJavaScript(str);
     };
 
     /**
@@ -561,8 +398,9 @@ page.onError = phantom.defaultErrorHandler;
      */
     page.evaluateAsync = function (func, timeMs, args) {
         // Remove the first 2 arguments because we are going to consume them
-        var numArgsToAppend = args.length, funcTimeoutWrapper;
-        args = Array.prototype.slice.call(arguments, 2);
+        var args = Array.prototype.slice.call(arguments, 2),
+            numArgsToAppend = args.length,
+            funcTimeoutWrapper;
 
         if (!(func instanceof Function || typeof func === 'string' || func instanceof String)) {
             throw "Wrong use of WebPage#evaluateAsync";
@@ -578,7 +416,7 @@ page.onError = phantom.defaultErrorHandler;
         // Augment the "args" array
         args.splice(0, 0, funcTimeoutWrapper);
 
-        return this.evaluate.apply(this, args);
+        this.evaluate.apply(this, args);
     };
 
     /**
@@ -586,7 +424,6 @@ page.onError = phantom.defaultErrorHandler;
      * @param {string}       selector  css selector for the file input element
      * @param {string,array} fileNames the name(s) of the file(s) to upload
      */
-     /*
     page.uploadFile = function(selector, fileNames) {
         if (typeof fileNames == "string") {
             fileNames = [fileNames];
@@ -605,11 +442,11 @@ page.onError = phantom.defaultErrorHandler;
 
     // Calls arrive to this handler when the user is asked to pick a file
     definePageCallbackHandler(page, handlers, "onFilePicker", "_getFilePickerCallback");
-*/
+
     // Calls from within the page to "window.confirm(message)" arrive to this handler
     // @see https://developer.mozilla.org/en/DOM/window.confirm
     definePageCallbackHandler(page, handlers, "onConfirm", "_getJsConfirmCallback");
-/*
+
     // Calls from within the page to "window.prompt(message, defaultValue)" arrive to this handler
     // @see https://developer.mozilla.org/en/DOM/window.prompt
     definePageCallbackHandler(page, handlers, "onPrompt", "_getJsPromptCallback");
@@ -1046,10 +883,10 @@ page.onError = phantom.defaultErrorHandler;
         'ydiaeresis': 255,
         'yen': 165
     };
-*/
+
     return page;
 }
 
-exports.create = function (opts, page) {
+exports.create = function (opts) {
     return decorateNewPage(opts, phantom.createWebPage());
 };

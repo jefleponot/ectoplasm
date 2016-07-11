@@ -20,7 +20,7 @@ console.log = (function(fct){
 function initPhantomClient() {
     _phantom  = {
         replay : true,
-        confirm : function(){return true;},
+        confirm : function(m){var event = new CustomEvent('Phantom', {'detail': m}); window.dispatchEvent(event);return true;},
         alert : function(){return true;},
         prompt : function(){return '';},
         callPhantom : function(){}
@@ -42,8 +42,10 @@ function setPhantomCallback(_phantom, callbackName, callbackSource) {
     document.body.appendChild(el);
 }
 
-window.addEventListener('callPhantom', function (e) { 
-    console.log('callPhantom event');
+window.addEventListener('Phantom', function (e) { 
+    console.log('Phantom event');
+    chrome.runtime.sendMessage({type: "confirm","data": e.detail});
+    console.log('Phantom event '+e.detail);
 }, false);
 
 

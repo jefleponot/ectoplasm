@@ -36,9 +36,27 @@ var phantom = {
         chrome.browserAction.setIcon({path: "icons/wsimuUI-32.png"});
     },
     "injectJs": function(){},
+    "javaScriptErrorSent": {"connect": function(message, lineNumber, source, stack){
+        //f.apply(null, arguments);
+        },
+        "disconnect": function(){
+        }
+    },
 //events
-    "onError" : function(msg,trace){alert(msg + " (" + trace + ")");},
-    
+    "defaultErrorHandler" : function(message, stack) {
+            console.log('A');
+                stack = stack || [];
+                console.log(message + "\n");
+console.log('B');/*
+                stack.forEach(function(item) {
+                    var message = item.file + ":" + item.line;
+                    if (item["function"])
+                        message += " in " + item["function"];
+                    console.log("  " + message);
+                });*/
+console.log('C');
+    },
+
 // page 
     "createWebPage": function(){
         var page = new Page();
@@ -60,7 +78,7 @@ var phantom = {
                 ['onAlert','onConfirm','onPrompt'].forEach(function(elm){
                     var code;
                     if (!page[elm] || typeof page[elm] !== "function") {
-                        code = "function(){return true;}";
+                        code = "function(m){var event = new CustomEvent('Phantom', {'detail': m}); window.dispatchEvent(event);return true;}";
                     } else {
                         code = page[elm].toString();
                     }
@@ -69,19 +87,56 @@ var phantom = {
                 });
             }
         });
-        
-        chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-            if (request.type && request.type === "console" && request.message && page.onConsoleMessage){
-                page.onConsoleMessage(request.message);
-            }
-            if (request.type && request.type === "callPhantom" && request.data && page.onCallback){
-                page.onCallback(request.data);
+        return page;
+    },
+    "__defineErrorSignalHandler__" :  function(obj, page, handlers) {
+        var handlerName = 'onError';
+
+        Object.defineProperty(obj, handlerName, {
+            set: function (f) {
+console.log('1');
+                // Disconnect previous handler (if any)
+                var handlerObj = handlers[handlerName];
+                if (!!handlerObj && typeof handlerObj.callback === "function" && typeof handlerObj.connector === "function") {
+                    try { page.javaScriptErrorSent.disconnect(handlerObj.connector); }
+                    catch (e) { }
+                }
+console.log('2');
+                // Delete the previous handler
+                delete handlers[handlerName];
+console.log('3');
+                if (typeof f === 'function') {
+                    var connector = function (message, lineNumber, source, stack) {
+                        var revisedStack = JSON.parse(stack).map(function (item) {
+                            return { file: item.url, line: item.lineNumber, function: item.functionName };
+                        });
+                        if (revisedStack.length == 0)
+                            revisedStack = [{ file: source, line: lineNumber }];
+
+                        f(message, revisedStack);
+                    };
+console.log('4');
+                    // Store the new handler for reference
+                    handlers[handlerName] = {
+                        callback: f,
+                        connector: connector
+                    };
+console.log('5 '+ typeof page);
+                    page.javaScriptErrorSent.connect(connector);
+console.log('6');
+                }
+            },
+            get: function () {
+                var handlerObj = handlers[handlerName];
+                return (!!handlerObj && typeof handlerObj.callback === "function" && typeof handlerObj.connector === "function") ?
+                    handlers[handlerName].callback :
+                    undefined;
             }
         });
-        return page;
     }
 };
 
+phantom.onError = phantom.defaultErrorHandler;
 
 function require(javascriptFile) {
     var xhr = new XMLHttpRequest(),obj={};
@@ -191,7 +246,7 @@ var Page = function Page(options) {
         return {"called": {"connect": function(f){
                 chrome.tabs.sendMessage(page.id, {callbackName: 'confirm', callbackSource: page.onConfirm.toString()});
             },"disconnect": function(){
-                chrome.tabs.sendMessage(page.id, {callbackName: 'confirm', callbackSource: "function(){return true;}"});
+                chrome.tabs.sendMessage(page.id, {callbackName: 'confirm', callbackSource: "function(m){return true;}"});
             }
         }};
     };
@@ -213,9 +268,13 @@ var Page = function Page(options) {
     };
     this._getGenericCallback = function() {
         return {"called": {"connect": function(f){
-           
+                chrome.runtime.onMessage.addListener(function onCallback(request, sender, sendResponse) {
+                    if (request.type && request.type === "callPhantom" && request.data && page.onCallback){
+                        page.onCallback(request.data);
+                    }
+                });
             },"disconnect": function(){
- 
+                chrome.runtime.onMessage.removeListener(onCallback);
             }
         }};
     };
@@ -227,6 +286,17 @@ var Page = function Page(options) {
             }
         }};
     };
+    
+    this.javaScriptAlertSent = {
+        "connect" : function(f){
+            chrome.tabs.sendMessage(page.id, {callbackName: 'alert', callbackSource: page.onAlert.toString()});
+        },
+        "disconnect": function(f){
+            chrome.tabs.sendMessage(page.id, {callbackName: 'alert', callbackSource: "function(){return true;}"});
+        }
+    };
+    
+    
     
     this.zoomFactor = {
         get : function() { 
@@ -252,6 +322,31 @@ var Page = function Page(options) {
             chrome.tabs.onRemoved.removeListener(onClosing);
         }
     };
+    this.initialized = {
+        "connect" : function(f){
+            chrome.webRequest.onResponseStarted.addListener(function onInitialized (details) {
+                if (details.tabId !== page.id) return;
+                f.apply(page);
+            }, {urls : ["http://*/*", "https://*/*"]});
+        },
+        "disconnect": function(f){
+            chrome.webRequest.onResponseStarted.removeListener(onInitialized);
+        }
+    };
+    
+    this.javaScriptConsoleMessageSent = {
+        "connect" : function(f){
+            chrome.runtime.onMessage.addListener(function onConsoleMessage(request, sender, sendResponse) {
+                if (request.type && request.type === "console" && request.message && page.onConsoleMessage){
+                    f.call(page, request.message);
+                }
+            });
+        },
+        "disconnect": function(f){
+            chrome.runtime.onMessage.removeListener(onConsoleMessage);
+        }
+    };
+
     this.loadFinished = {
         "connect" : function(f){
             chrome.tabs.onUpdated.addListener(function _onPageOpenFinished (tabId, changeInfo, tab) {
@@ -285,11 +380,20 @@ var Page = function Page(options) {
     
     this.navigationRequested = {
         "connect" : function(f){
-            chrome.webNavigation.onCommitted.addListener(function onNavigationRequested (tabId, changeInfo, tab) {
-                if (tab.id !== page.id) return;
-                if (changeInfo.status && changeInfo.status ==  "loading" && tab.url !== "about:blank") {
-                    f.apply(page,[url, type, willNavigate, main]);
-                }
+            chrome.webNavigation.onCommitted.addListener(function onNavigationRequested (details) {
+                if (details.tabId !== page.id) return;
+                var type = 'Other';
+                var types = {
+                            link: 'LinkClicked', 
+                            form_submit: 'FormSubmitted', 
+                            auto_bookmark: 'BackOrForward', 
+                            reload: 'Reload'
+                };
+                if (typeof types[transitionType] !== "undefined"){
+                    type = types[transitionType];
+                } 
+                f.apply(page,[details.url, type, true, details.frameId === 0]);
+                
             });
         },
         "disconnect": function(f){
@@ -299,13 +403,25 @@ var Page = function Page(options) {
 
     this.rawPageCreated = {
         "connect": function(f){
-            chrome.tabs.onCreated.addListener(function onRawPageCreated(tab){
+            /*chrome.tabs.onCreated.addListener(function onRawPageCreated(tab){
                 var page = new Page();
                 f.apply(page,page);
-            });
+            });*/
         },
         "disconnect": function(f){
-            chrome.webRequest.onHeadersReceived.removeListener(onRawPageCreated);
+            //chrome.tabs.onCreated.removeListener(onRawPageCreated);
+        }
+    };
+    
+    this.repaintRequested = {
+        "connect": function(f){
+            /*chrome.tabs.onCreated.addListener(function onRawPageCreated(tab){
+                var page = new Page();
+                f.apply(page,page);
+            });*/
+        },
+        "disconnect": function(f){
+            //chrome.tabs.onCreated.removeListener(onRawPageCreated);
         }
     };
     
@@ -395,6 +511,29 @@ var Page = function Page(options) {
         "disconnect": function(f){
             chrome.webRequest.onHeadersReceived.removeListener(onResourceReceivedStart);
             chrome.webRequest.onCompleted.removeListener(onResourceReceivedEnd);
+        }
+    };
+    
+    this.resourceTimeout = {
+        "connect": function(f){
+            // TODO
+        },
+        "disconnect": function(f){
+            // TODO
+        }
+    };
+    
+    this.urlChanged = {
+        "connect" : function(f){
+            chrome.tabs.onUpdated.addListener(function onUrlChanged (tabId, changeInfo, tab) {
+                if (tab.id !== page.id) return;
+                if (changeInfo.url && tab.url !== "about:blank") {
+                    f.apply(page,[]);
+                }
+            });
+        },
+        "disconnect": function(f){
+            chrome.tabs.onUpdated.removeListener(onUrlChanged);
         }
     };
 };
@@ -507,9 +646,11 @@ Page.prototype.deleteCookie = function deleteCookie() {
  */
 Page.prototype.evaluateJavaScript = function evaluateJavaScript(code, callback){
     var page = this;
+    code = code.substring(20,code.length-3);
+    //code = '(' + code.substring(0,code.length-3) + '})()';
     //code = "(" + code.replace(/;$/, '') + ")()";
-    code = code.replace(/;$/, '');
-//    console.log(code);
+    //code = code.replace(/;$/, '');
+    //console.log(code);
 //    console.log(page.allFrames+'  '+page.id);
     chrome.tabs.executeScript (page.id,{"code":code,"allFrames":page.allFrames},function(rets){
         if (typeof (callback) === "function") {
@@ -600,7 +741,6 @@ Page.prototype.go = function go() {
 Page.prototype.injectJs = function injectJs(scriptUrl) {
     var page = this;
     chrome.tabs.executeScript ({"file":scriptUrl,"allFrames":page.allFrames},function(rets){
-
     });
     return true;
 };
@@ -713,11 +853,11 @@ Page.prototype.sendEvent = function sendEvent() {
             mouseX = parseInt(args[1], 10) || 1;
             mouseY = parseInt(args[2], 10) || 1;
         } 
-console.log('alors');
+
         page.evaluate(function(mouseEventType, mouseX, mouseY, button){
             try {
                 var evt = document.createEvent("MouseEvents");
-                var elm = document.elementFromPoint(mouseX, mouseY);
+                var elm = document.elementFromPoint(parseInt(mouseX,10), parseInt(mouseY,10));
                 evt.initMouseEvent(mouseEventType, true, true, window, 1, 1, 1, 1, 1, false, false, false, false, button, elm);
                 elm.dispatchEvent(evt);
                 return true;
