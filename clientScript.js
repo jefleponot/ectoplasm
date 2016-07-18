@@ -9,6 +9,10 @@ window.callPhantom = function(data){
     chrome.runtime.sendMessage({type: "callPhantom","data": data});
 };
 
+window.addEventListener('error', function(event) {
+    chrome.runtime.sendMessage({type: "error","message": event.error.message,"trace":event.error});
+}, false);
+
 console.log = (function(fct){ 
     return function(message) {
         fct.call(console, message);
@@ -42,11 +46,7 @@ function setPhantomCallback(_phantom, callbackName, callbackSource) {
     document.body.appendChild(el);
 }
 
-window.addEventListener('Phantom', function (e) { 
-    console.log('Phantom event');
-    chrome.runtime.sendMessage({type: "confirm","data": e.detail});
-    console.log('Phantom event '+e.detail);
-}, false);
+
 
 
 if (window.parent == window) {

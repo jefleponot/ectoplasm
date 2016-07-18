@@ -272,7 +272,7 @@ function decorateNewPage(opts, page) {
 
     phantom.__defineErrorSignalHandler__(page, page, handlers);
 
-    //page.onError = phantom.defaultErrorHandler;
+    page.onError = phantom.defaultErrorHandler;
 
     page.open = function (url, arg1, arg2, arg3, arg4) {
         var thisPage = this;

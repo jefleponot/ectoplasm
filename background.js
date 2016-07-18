@@ -36,99 +36,59 @@ var phantom = {
         chrome.browserAction.setIcon({path: "icons/wsimuUI-32.png"});
     },
     "injectJs": function(){},
-    "javaScriptErrorSent": {"connect": function(message, lineNumber, source, stack){
-        //f.apply(null, arguments);
-        },
-        "disconnect": function(){
-        }
-    },
 //events
     "defaultErrorHandler" : function(message, stack) {
-            console.log('A');
                 stack = stack || [];
                 console.log(message + "\n");
-console.log('B');/*
+/*
                 stack.forEach(function(item) {
                     var message = item.file + ":" + item.line;
                     if (item["function"])
                         message += " in " + item["function"];
                     console.log("  " + message);
                 });*/
-console.log('C');
     },
 
 // page 
     "createWebPage": function(){
         var page = new Page();
         chrome.tabs.create({"index": 0,"url":"about:blank"}, function (tab){
-            //console.log(tab.id);
             page.tab = tab;
             page.id = tab.id;
-            //chrome.tabs.highlight({"tabs" : tab});
         });
         
-        chrome.tabs.onUpdated.addListener(function onResourceRequested(tabId, changeInfo, tab) {
-            if (tab.id !== page.id) return;
-            if (changeInfo.status && changeInfo.status === "complete"  && tab.url !== "about:blank") {
-                page.updateProperties();
-                //page.onConfirm;
-                page.title = tab.title || page.title;
-                page.url = tab.url || page.url;
-                
-                ['onAlert','onConfirm','onPrompt'].forEach(function(elm){
-                    var code;
-                    if (!page[elm] || typeof page[elm] !== "function") {
-                        code = "function(m){var event = new CustomEvent('Phantom', {'detail': m}); window.dispatchEvent(event);return true;}";
-                    } else {
-                        code = page[elm].toString();
-                    }
-                    var name = elm.substring(2).toLowerCase();
-                    chrome.tabs.sendMessage(page.id, {callbackName: name, callbackSource: code });
-                });
-            }
-        });
         return page;
     },
     "__defineErrorSignalHandler__" :  function(obj, page, handlers) {
         var handlerName = 'onError';
-
-        Object.defineProperty(obj, handlerName, {
+        var signalName = 'javaScriptErrorSent';
+        //definePageSignalHandler(page, handlers, handlerName, signalName);
+        Object.defineProperty(page, handlerName, {
             set: function (f) {
-console.log('1');
+                //console.log('MISE A JOUR ERROR '+f.toString());
                 // Disconnect previous handler (if any)
-                var handlerObj = handlers[handlerName];
-                if (!!handlerObj && typeof handlerObj.callback === "function" && typeof handlerObj.connector === "function") {
-                    try { page.javaScriptErrorSent.disconnect(handlerObj.connector); }
-                    catch (e) { }
+                if (!!handlers[handlerName] && typeof handlers[handlerName].callback === "function") {
+                    try {
+                        this[signalName].disconnect(handlers[handlerName].callback);
+                    } catch (e) {
+                        console.log('====================> '+JSON.stringify(e));
+                    }
                 }
-console.log('2');
+
                 // Delete the previous handler
                 delete handlers[handlerName];
-console.log('3');
-                if (typeof f === 'function') {
-                    var connector = function (message, lineNumber, source, stack) {
-                        var revisedStack = JSON.parse(stack).map(function (item) {
-                            return { file: item.url, line: item.lineNumber, function: item.functionName };
-                        });
-                        if (revisedStack.length == 0)
-                            revisedStack = [{ file: source, line: lineNumber }];
 
-                        f(message, revisedStack);
-                    };
-console.log('4');
+                // Connect the new handler iff it's a function
+                if (typeof f === "function") {
                     // Store the new handler for reference
                     handlers[handlerName] = {
-                        callback: f,
-                        connector: connector
-                    };
-console.log('5 '+ typeof page);
-                    page.javaScriptErrorSent.connect(connector);
-console.log('6');
+                        callback: f
+                    }
+                    this[signalName].connect(f);
                 }
             },
-            get: function () {
-                var handlerObj = handlers[handlerName];
-                return (!!handlerObj && typeof handlerObj.callback === "function" && typeof handlerObj.connector === "function") ?
+            get: function() {
+                return !!handlers[handlerName] && typeof handlers[handlerName].callback === "function" ?
                     handlers[handlerName].callback :
                     undefined;
             }
@@ -274,7 +234,7 @@ var Page = function Page(options) {
                     }
                 });
             },"disconnect": function(){
-                chrome.runtime.onMessage.removeListener(onCallback);
+                chrome.runtime.onMessage.removeListener(page.onCallback);
             }
         }};
     };
@@ -319,7 +279,7 @@ var Page = function Page(options) {
             });
         },
         "disconnect": function(f){
-            chrome.tabs.onRemoved.removeListener(onClosing);
+            chrome.tabs.onRemoved.removeListener(page.onClosing);
         }
     };
     this.initialized = {
@@ -330,7 +290,7 @@ var Page = function Page(options) {
             }, {urls : ["http://*/*", "https://*/*"]});
         },
         "disconnect": function(f){
-            chrome.webRequest.onResponseStarted.removeListener(onInitialized);
+            chrome.webRequest.onResponseStarted.removeListener(page.onInitialized);
         }
     };
     
@@ -343,10 +303,23 @@ var Page = function Page(options) {
             });
         },
         "disconnect": function(f){
-            chrome.runtime.onMessage.removeListener(onConsoleMessage);
+            chrome.runtime.onMessage.removeListener(page.onConsoleMessage);
         }
     };
 
+    this.javaScriptErrorSent = {
+        "connect" : function(f){
+            chrome.runtime.onMessage.addListener(function onError(request, sender, sendResponse) {
+                if (request.type && request.type === "error" && request.message && page.onError){
+                    f.call(page, request.message, request.trace);
+                }
+            });
+        },
+        "disconnect": function(f){
+            chrome.runtime.onMessage.removeListener(page.onError);
+        }
+    };
+    
     this.loadFinished = {
         "connect" : function(f){
             chrome.tabs.onUpdated.addListener(function _onPageOpenFinished (tabId, changeInfo, tab) {
@@ -356,11 +329,25 @@ var Page = function Page(options) {
                     page.scrollPosition = { top: 0,  left: 0 };
                     page.viewportSize = { width: tab.width, height: tab.height };
                     f.apply(page,['success']);
+                    page.updateProperties();
+                    page.title = tab.title || page.title;
+                    page.url = tab.url || page.url;
+                    
+                    ['onAlert','onConfirm','onPrompt'].forEach(function(elm){
+                        var code;
+                        if (!page[elm] || typeof page[elm] !== "function") {
+                            code = "function(m){var event = new CustomEvent('Phantom', {'detail': m}); window.dispatchEvent(event);return true;}";
+                        } else {
+                            code = page[elm].toString();
+                        }
+                        var name = elm.substring(2).toLowerCase();
+                        chrome.tabs.sendMessage(page.id, {callbackName: name, callbackSource: code });
+                    });
                 }
             });
         },
         "disconnect": function(f){
-            chrome.tabs.onUpdated.removeListener(_onPageOpenFinished);
+            chrome.tabs.onUpdated.removeListener(page._onPageOpenFinished);
         }
     };
             
@@ -374,7 +361,7 @@ var Page = function Page(options) {
             });
         },
         "disconnect": function(f){
-            chrome.tabs.onUpdated.removeListener(onLoadStarted);
+            chrome.tabs.onUpdated.removeListener(page.onLoadStarted);
         }
     };
     
@@ -397,7 +384,7 @@ var Page = function Page(options) {
             });
         },
         "disconnect": function(f){
-            chrome.webNavigation.onCommitted.removeListener(onNavigationRequested);
+            chrome.webNavigation.onCommitted.removeListener(page.onNavigationRequested);
         }
     };
 
@@ -437,7 +424,7 @@ var Page = function Page(options) {
             }, {urls : ["http://*/*", "https://*/*"]});
         },
         "disconnect": function(f){
-            chrome.webRequest.onErrorOccurred.removeListener(onResourceError);
+            chrome.webRequest.onErrorOccurred.removeListener(page.onResourceError);
         }
     };
 
@@ -463,7 +450,7 @@ var Page = function Page(options) {
             }, {urls : ["http://*/*", "https://*/*"]}, ["requestHeaders"]);
         },
         "disconnect": function(f){
-            chrome.webRequest.onBeforeSendHeaders.removeListener(onResourceRequested);
+            chrome.webRequest.onBeforeSendHeaders.removeListener(page.onResourceRequested);
         }
     };
 
@@ -480,37 +467,40 @@ var Page = function Page(options) {
                             this.ret.redirectUrl = newUrl;
                     }
             };
-
-            chrome.webRequest.onHeadersReceived.addListener( function onResourceReceivedStart(details) {
-                    obj.time = new Date(details.timeStamp);
-                    obj.stage = 'start';
-                    for (var i in obj) {
-                        details[i] = details[obj[i]];
-                        delete details[obj[i]];
-                    }
-                    f.apply(page, [details, networkRequest]);
-                    return networkRequest.ret;
-                }, 
+            page.onResourceReceivedStart = function onResourceReceivedStart(details) {
+                obj.time = new Date(details.timeStamp);
+                obj.stage = 'start';
+                for (var i in obj) {
+                    details[i] = details[obj[i]];
+                    delete details[obj[i]];
+                }
+                f.apply(page, [details, networkRequest]);
+                return networkRequest.ret;
+            };
+            
+            page.onResourceReceivedEnd = function onResourceReceivedEnd(details) {
+                obj.time = new Date(details.timeStamp);
+                obj.stage = 'end';
+                for (var i in obj) {
+                    details[i] = details[obj[i]];
+                    delete details[obj[i]];
+                }
+                f.apply(page, [details, networkRequest]);
+                return networkRequest.ret;
+            };
+            
+            chrome.webRequest.onHeadersReceived.addListener( page.onResourceReceivedStart,
                 {urls : ["http://*/*", "https://*/*"]}, 
                 ["responseHeaders"]
             );
-            chrome.webRequest.onCompleted.addListener( function onResourceReceivedEnd(details) {
-                    obj.time = new Date(details.timeStamp);
-                    obj.stage = 'end';
-                    for (var i in obj) {
-                        details[i] = details[obj[i]];
-                        delete details[obj[i]];
-                    }
-                    f.apply(page, [details, networkRequest]);
-                    return networkRequest.ret;
-                }, 
+            chrome.webRequest.onCompleted.addListener( page.onResourceReceivedEnd,
                 {urls : ["http://*/*", "https://*/*"]}, 
                 ["responseHeaders"]
             );
         },
         "disconnect": function(f){
-            chrome.webRequest.onHeadersReceived.removeListener(onResourceReceivedStart);
-            chrome.webRequest.onCompleted.removeListener(onResourceReceivedEnd);
+            chrome.webRequest.onHeadersReceived.removeListener(page.onResourceReceivedStart);
+            chrome.webRequest.onCompleted.removeListener(page.onResourceReceivedEnd);
         }
     };
     
@@ -533,7 +523,7 @@ var Page = function Page(options) {
             });
         },
         "disconnect": function(f){
-            chrome.tabs.onUpdated.removeListener(onUrlChanged);
+            chrome.tabs.onUpdated.removeListener(page.onUrlChanged);
         }
     };
 };
@@ -646,13 +636,17 @@ Page.prototype.deleteCookie = function deleteCookie() {
  */
 Page.prototype.evaluateJavaScript = function evaluateJavaScript(code, callback){
     var page = this;
-    code = code.substring(20,code.length-3);
+    code = code.substring(20,code.length-7) + ";return null})()";
     //code = '(' + code.substring(0,code.length-3) + '})()';
     //code = "(" + code.replace(/;$/, '') + ")()";
     //code = code.replace(/;$/, '');
-    //console.log(code);
+    console.log(code);
 //    console.log(page.allFrames+'  '+page.id);
     chrome.tabs.executeScript (page.id,{"code":code,"allFrames":page.allFrames},function(rets){
+        console.log('resultat '+ chrome.extension.lastError+"  "+JSON.stringify(rets));
+        if (chrome.extension.lastError) {
+            console.error(chrome.extension.lastError);
+        }
         if (typeof (callback) === "function") {
             callback(rets);
         }else{
