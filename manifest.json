@@ -1,7 +1,7 @@
 {
-  "description": "Automated browsing tool with an actions recorder and an export to multiple formats",
+  "description": "Allows Navigation scripting and testing for all browsers with CasperJS",
   "manifest_version": 2,
-  "name": "ectoplasm",
+  "name": "phantomify",
   "version": "1.0",
   "icons": {
     "48": "icons/ectoplasm-48.png",
@@ -24,12 +24,14 @@
     "background",
     "http://*/*",
     "https://*/*",
+    "*://*/*",
     "cookies",
     "downloads", 
     "contextMenus", 
     "debugger", 
     "webNavigation",
     "webRequest",
+    "webRequestBlocking",
     "<all_urls>"
   ],
 
@@ -38,6 +40,7 @@
     "default_title": "ectoplasm",
     "default_popup": "popup/popup.html"
   },
+  
 
   "background": {
     "scripts": ["background.js"]

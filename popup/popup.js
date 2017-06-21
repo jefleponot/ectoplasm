@@ -1,6 +1,6 @@
 (function(){
   var editor = CodeMirror(document.body, {
-    value: "\"use strict\";                      \n\nphantom.exit();",
+    value: "\"use strict\";     console.log('kk');                 \n\nphantom.exit();",
     mode:  "javascript",
     lineNumbers: true,
     matchBrackets: true,

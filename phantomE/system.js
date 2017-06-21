@@ -29,13 +29,24 @@ Object.defineProperty(exports, 'stderr', {
     }
 });
 
-
 exports.args = [];
+exports.args = data.substr(data.indexOf('?')+1).split('&');
+//    var args = {}, pos = 0;
+//for (var i = 0, l = searchs.length; i < l; i++) {
+    //exports.args.push("--" + searchs[i]);
+    //pos = searchs[i].indexOf('=');
+    //args[searchs[i].substr(0, pos)] = searchs[i].substr(pos + 1);
+//}
+
 exports.env = {};
-exports.os = {
-	"architecture": chrome.runtime.PlatformArch || "x86-64",
-	"name": chrome.runtime.PlatformOs || "windows", 
-	"version": chrome.runtime.id
-};
+chrome.runtime.getPlatformInfo(function( platformInfo) {
+    
+    exports.os = {
+        "architecture": (platformInfo.arch === "x86-32") ? "32bit" : (platformInfo.arch === "x86-64" ? "64bit" : platformInfo.arch),
+        "name": (platformInfo.os === "win" ) ? "windows" : platformInfo.os, 
+        "version": "unknown"
+    };
+    //alert(JSON.stringify(exports.os,null,4));
+});
 exports.pid = 256314;
 
