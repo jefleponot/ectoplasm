@@ -2,6 +2,49 @@
  * CommonJS System/1.0
  * Spec: http://wiki.commonjs.org/wiki/System/1.0
  */
+ 
+
+var url = "about:blank";
+
+function require(javascriptFile) {
+    var xhr = new XMLHttpRequest(),obj={};
+    
+    var correspondence = {
+       
+    "child_process": "phantomE/child_process.js",
+    "cookiejar":     "phantomE/cookiejar.js",
+    "fs":            "phantomE/fs.js",
+    "system":        "phantomE/system.js",
+    "webpage":       "phantomE/webpage.js",
+    "webserver":     "phantomE/webserver.js",
+    };
+
+    if (typeof (exports_library[javascriptFile]) != "undefined"){
+        return exports_library[javascriptFile];
+    }
+    console.log("*** " + (correspondence[javascriptFile] || javascriptFile));
+    xhr.open("GET", chrome.extension.getURL(correspondence[javascriptFile] || javascriptFile), false);
+    xhr.send(null);
+    if (xhr.status === 200) {
+        if (xhr.readyState === 4) {
+            try {
+                exports_library[javascriptFile] = eval('(function(data){var exports={};'+xhr.responseText+';return exports;})("'+ url + '");');
+                
+                return exports_library[javascriptFile];
+            } catch(e){
+                phantom.onError(javascriptFile+" - "+ e);
+            }
+        }
+    }else {
+        alert('error');
+    }
+    return {};
+}
+
+
+function patchRequire(data) {
+   return require;
+};
 
 var exports_library = {};
 var phantom = {
@@ -12,11 +55,12 @@ var phantom = {
     "cookiesEnabled" : true,
     "libraryPath" : "/casper/modules/",
     "scriptName" :    "wsimuUi",
-    "version" :        { 'major': 1, 'minor': 9, 'patch': 0 },
+    "version" :        { 'major': 2, 'minor': 1, 'patch': 1 },
     "defaultPageSettings": { 'userAgent' : "PhantomJS" },
     "casperEngine": "phantomjs",
     "casperVersion" : "1.1-beta3",
     "casperPath": "casper",
+    "pages": [],
 //methods    
     "addCookie":    function(cookie){
             chrome.cookies.set(cookie, function (){});
@@ -34,19 +78,48 @@ var phantom = {
     "exit": function(){
         chrome.browserAction.setBadgeText({text:""});
         chrome.browserAction.setIcon({path: "icons/wsimuUI-32.png"});
+        console.log('exit');
+        for (var i=this.pages.length-1;i>=0;i--){
+            console.log('exit '+i);
+            if (typeof this.pages[i] !== "undefined"){
+                this.pages[i].close();
+            }
+            this.pages = [];
+        }
+        
+        chrome.windows.getCurrent({}, function (window) {
+            chrome.windows.remove(window.id);
+        });
     },
-    "injectJs": function(){},
+    "injectJs": function(javascriptFile) {
+        console.log("injectJs");
+        var xhr = new XMLHttpRequest(),obj={};
+        console.log("/// " + javascriptFile);
+        xhr.open("GET", chrome.extension.getURL(javascriptFile), false);
+        xhr.send(null);
+        if (xhr.status === 200) {
+            if (xhr.readyState === 4) {
+                try {
+                    eval('(function(data){'+xhr.responseText+'})();');
+                } catch(e){
+                    phantom.onError(javascriptFile+" - "+ e);
+                }
+            }
+        }else {
+            alert('error');
+        }
+        return {};
+    },
 //events
     "defaultErrorHandler" : function(message, stack) {
-                stack = stack || [];
-                console.log(message + "\n");
-/*
-                stack.forEach(function(item) {
-                    var message = item.file + ":" + item.line;
-                    if (item["function"])
-                        message += " in " + item["function"];
-                    console.log("  " + message);
-                });*/
+        stack = stack || [];
+        console.log(message + "\n");
+        /*stack.forEach(function(item) {
+            var message = item.file + ":" + item.line;
+            if (item["function"])
+                message += " in " + item["function"];
+            console.log("  " + message);
+        });*/
     },
 
 // page 
@@ -56,9 +129,11 @@ var phantom = {
             page.tab = tab;
             page.id = tab.id;
         });
-        
+        this.pages.push(page);
+        console.log(JSON.stringify(page,null,4));
         return page;
     },
+    
     "__defineErrorSignalHandler__" :  function(obj, page, handlers) {
         var handlerName = 'onError';
         var signalName = 'javaScriptErrorSent';
@@ -96,910 +171,17 @@ var phantom = {
     }
 };
 
+chrome.tabs.query({}, function (tabs) {
+    url = tabs[0].url;
+    var system = require('system');
+    var system = require(system.args[0]);
+//    alert('hi');
+});
+
 phantom.onError = phantom.defaultErrorHandler;
 
-function require(javascriptFile) {
-    var xhr = new XMLHttpRequest(),obj={};
-    
-    var correspondence = {
-       
-    "child_process": "phantomE/child_process.js",
-    "cookiejar":     "phantomE/cookiejar.js",
-    "fs":            "phantomE/fs.js",
-    "system":        "phantomE/system.js",
-    "webpage":       "phantomE/webpage.js",
-    "webserver":     "phantomE/webserver.js",
-    
-    "bootstrap":     "casper/bootstrap.js",
-    "casper":        "casper/modules/casper.js",
-    "cli":           "casper/modules/cli.js",
-    "colorizer":     "casper/modules/colorizer.js", 
-    "events":        "casper/modules/events.js",
-    "http":          "casper/modules/http.js",
-    "mouse":         "casper/modules/mouse.js",
-    "pagestack":     "casper/modules/pagestack.js",
-    "querystring":   "casper/modules/querystring.js",
-    "tester":        "casper/modules/tester.js",
-    "toolsbox":      "casper/modules/toolsbox.js",
-    "utils":         "casper/modules/utils.js",
-    "xunit":         "casper/modules/xunit.js"
-    };
+//setTimeout(function(){    phantom.exit(0);},1000);
 
-    if (typeof (exports_library[javascriptFile]) != "undefined"){
-        return exports_library[javascriptFile];
-    }
-
-    xhr.open("GET", chrome.extension.getURL(correspondence[javascriptFile]), false);
-    xhr.send(null);
-    if ((xhr.status === 200) && (xhr.readyState === 4)) {
-        if (javascriptFile == "background"){
-            eval(xhr.responseText);
-            return ;
-        }
-        try {
-            exports_library[javascriptFile] = eval('(function(){var exports={};'+xhr.responseText+';return exports;})();');
-            return exports_library[javascriptFile];
-        } catch(e){
-            phantom.onError(javascriptFile+" - "+ e);
-        }
-    }
-    return {};
-}
-
-
-/**
- * Main Page object.
- *
- * @param  Object  options  Casper options
- */
-var Page = function Page(options) {
-    "use strict";
-    /*eslint max-statements:0*/
-    // init & checks
-    if (!(this instanceof Page)) {
-        return new Page(options);
-    }
-    var page = this;
-    // default options
-    this.id = 0;
-    this.tab = null;
-    this.frames = 0;
-    this.allFrames = false;
-    this.framesLoading = 0;
-    this.evaluateResult = null;
-
-    this.canGoBack = false;
-    this.canGoForward = false;
-    this.clipRect = { top: 14, left: 3, width: 400, height: 300 };
-    this.content = "";
-    this.cookies = [];
-    this.customHeaders = {};
-    this.event = {};
-    this.focusedFrameName = "";
-    this.frameContent = "";
-    this.frameName = "";
-    this.framePlainText = "";
-    this.frameTitle = "";
-    this.frameUrl = "";
-    this.framesCount = 0;
-    this.framesName = [];
-    this.libraryPath = "";
-    this.navigationLocked = false;
-    this.offlineStoragePath = "";
-    this.offlineStorageQuota = 0;
-    this.ownsPages = [];
-    this.pagesWindowName = [];
-    this.pages = [];
-    this.paperSize = {};
-    this.plainText = "";
-    this.scrollPosition = { top: 100, left: 0 };
-    this.settings = {};
-    this.title = "";
-    this.url = "";
-    this.viewportSize = { width: 1024, height: 768 };
-    this.windowName = "";
-    this.zoomFactorValue = 1;
-    
-    //callbacks
-    //Object.defineProperty(page, "onConfirm", { 
-    this._getJsConfirmCallback = function() {
-        return {"called": {"connect": function(f){
-                chrome.tabs.sendMessage(page.id, {callbackName: 'confirm', callbackSource: page.onConfirm.toString()});
-            },"disconnect": function(){
-                chrome.tabs.sendMessage(page.id, {callbackName: 'confirm', callbackSource: "function(m){return true;}"});
-            }
-        }};
-    };
-    this._getJsPromptCallback = function() {
-        return {"called": {"connect": function(f){
-                chrome.tabs.sendMessage(page.id, {callbackName: 'prompt', callbackSource: page.onPrompt.toString()});
-            },"disconnect": function(){
-                chrome.tabs.sendMessage(page.id, {callbackName: 'prompt', callbackSource: "function(){return true;}"});
-            }
-        }};
-    };
-    this._getJsInterruptCallback = function() {
-        return {"called": {"connect": function(f){
-           
-            },"disconnect": function(){
- 
-            }
-        }};
-    };
-    this._getGenericCallback = function() {
-        return {"called": {"connect": function(f){
-                chrome.runtime.onMessage.addListener(function onCallback(request, sender, sendResponse) {
-                    if (request.type && request.type === "callPhantom" && request.data && page.onCallback){
-                        page.onCallback(request.data);
-                    }
-                });
-            },"disconnect": function(){
-                chrome.runtime.onMessage.removeListener(page.onCallback);
-            }
-        }};
-    };
-    this._getFilePickerCallback = function() {
-        return {"called": {"connect": function(f){
-           
-            },"disconnect": function(){
- 
-            }
-        }};
-    };
-    
-    this.javaScriptAlertSent = {
-        "connect" : function(f){
-            chrome.tabs.sendMessage(page.id, {callbackName: 'alert', callbackSource: page.onAlert.toString()});
-        },
-        "disconnect": function(f){
-            chrome.tabs.sendMessage(page.id, {callbackName: 'alert', callbackSource: "function(){return true;}"});
-        }
-    };
-    
-    
-    
-    this.zoomFactor = {
-        get : function() { 
-            return this.zoomFactorValue; 
-        },
-        set : function(newValue) {
-                this.zoomFactorValue = newValue; 
-                tabs.setZoom(page.id, newValue);
-        },
-        enumerable : true,
-        configurable : true
-    };
-    
-    //events
-    this.closing = {
-        "connect" : function(f){
-            chrome.tabs.onRemoved.addListener(function onClosing (tabId, removeInfo) {
-                if (tab.id !== page.id) return;
-                f.apply(page,['success']);
-            });
-        },
-        "disconnect": function(f){
-            chrome.tabs.onRemoved.removeListener(page.onClosing);
-        }
-    };
-    this.initialized = {
-        "connect" : function(f){
-            chrome.webRequest.onResponseStarted.addListener(function onInitialized (details) {
-                if (details.tabId !== page.id) return;
-                f.apply(page);
-            }, {urls : ["http://*/*", "https://*/*"]});
-        },
-        "disconnect": function(f){
-            chrome.webRequest.onResponseStarted.removeListener(page.onInitialized);
-        }
-    };
-    
-    this.javaScriptConsoleMessageSent = {
-        "connect" : function(f){
-            chrome.runtime.onMessage.addListener(function onConsoleMessage(request, sender, sendResponse) {
-                if (request.type && request.type === "console" && request.message && page.onConsoleMessage){
-                    f.call(page, request.message);
-                }
-            });
-        },
-        "disconnect": function(f){
-            chrome.runtime.onMessage.removeListener(page.onConsoleMessage);
-        }
-    };
-
-    this.javaScriptErrorSent = {
-        "connect" : function(f){
-            chrome.runtime.onMessage.addListener(function onError(request, sender, sendResponse) {
-                if (request.type && request.type === "error" && request.message && page.onError){
-                    f.call(page, request.message, request.trace);
-                }
-            });
-        },
-        "disconnect": function(f){
-            chrome.runtime.onMessage.removeListener(page.onError);
-        }
-    };
-    
-    this.loadFinished = {
-        "connect" : function(f){
-            chrome.tabs.onUpdated.addListener(function _onPageOpenFinished (tabId, changeInfo, tab) {
-                if (tab.id !== page.id) return;
-                if (changeInfo.status && changeInfo.status === "complete" && tab.url !== "about:blank"){
-                    page.status = "success";
-                    page.scrollPosition = { top: 0,  left: 0 };
-                    page.viewportSize = { width: tab.width, height: tab.height };
-                    f.apply(page,['success']);
-                    page.updateProperties();
-                    page.title = tab.title || page.title;
-                    page.url = tab.url || page.url;
-                    
-                    ['onAlert','onConfirm','onPrompt'].forEach(function(elm){
-                        var code;
-                        if (!page[elm] || typeof page[elm] !== "function") {
-                            code = "function(m){var event = new CustomEvent('Phantom', {'detail': m}); window.dispatchEvent(event);return true;}";
-                        } else {
-                            code = page[elm].toString();
-                        }
-                        var name = elm.substring(2).toLowerCase();
-                        chrome.tabs.sendMessage(page.id, {callbackName: name, callbackSource: code });
-                    });
-                }
-            });
-        },
-        "disconnect": function(f){
-            chrome.tabs.onUpdated.removeListener(page._onPageOpenFinished);
-        }
-    };
-            
-    this.loadStarted = {
-        "connect" : function(f){
-            chrome.tabs.onUpdated.addListener(function onLoadStarted (tabId, changeInfo, tab) {
-                if (tab.id !== page.id) return;
-                if (changeInfo.status && changeInfo.status ==  "loading" && tab.url !== "about:blank") {
-                    f.apply(page,[]);
-                }
-            });
-        },
-        "disconnect": function(f){
-            chrome.tabs.onUpdated.removeListener(page.onLoadStarted);
-        }
-    };
-    
-    this.navigationRequested = {
-        "connect" : function(f){
-            chrome.webNavigation.onCommitted.addListener(function onNavigationRequested (details) {
-                if (details.tabId !== page.id) return;
-                var type = 'Other';
-                var types = {
-                            link: 'LinkClicked', 
-                            form_submit: 'FormSubmitted', 
-                            auto_bookmark: 'BackOrForward', 
-                            reload: 'Reload'
-                };
-                if (typeof types[transitionType] !== "undefined"){
-                    type = types[transitionType];
-                } 
-                f.apply(page,[details.url, type, true, details.frameId === 0]);
-                
-            });
-        },
-        "disconnect": function(f){
-            chrome.webNavigation.onCommitted.removeListener(page.onNavigationRequested);
-        }
-    };
-
-    this.rawPageCreated = {
-        "connect": function(f){
-            /*chrome.tabs.onCreated.addListener(function onRawPageCreated(tab){
-                var page = new Page();
-                f.apply(page,page);
-            });*/
-        },
-        "disconnect": function(f){
-            //chrome.tabs.onCreated.removeListener(onRawPageCreated);
-        }
-    };
-    
-    this.repaintRequested = {
-        "connect": function(f){
-            /*chrome.tabs.onCreated.addListener(function onRawPageCreated(tab){
-                var page = new Page();
-                f.apply(page,page);
-            });*/
-        },
-        "disconnect": function(f){
-            //chrome.tabs.onCreated.removeListener(onRawPageCreated);
-        }
-    };
-    
-    this.resourceError = {
-        "connect" : function(f){
-            chrome.webRequest.onErrorOccurred.addListener(function onResourceError(details) {
-                var obj = {'id' : 'requestId', 'time': new Date(details.timeStamp), 'errorString': 'error', 'errorCode': 'xxx'};
-                for (var i in obj) {
-                    details[i] = details[obj[i]] || obj[i];
-                    delete details[obj[i]];
-                }
-                f.apply(page, [details]);
-            }, {urls : ["http://*/*", "https://*/*"]});
-        },
-        "disconnect": function(f){
-            chrome.webRequest.onErrorOccurred.removeListener(page.onResourceError);
-        }
-    };
-
-    this.resourceRequested = {
-        "connect" : function(f){
-            chrome.webRequest.onBeforeSendHeaders.addListener(function onResourceRequested(details) {
-                var networkRequest = {
-                    "ret" : {},
-                    "abort": function () {
-                            this.ret.cancel = true;
-                    },
-                    "changeUrl" : function (newUrl) {
-                            this.ret.redirectUrl = newUrl;
-                    }
-                };
-                var obj = {'id' : 'requestId', 'time': new Date(details.timeStamp), 'headers': 'requestHeaders'};
-                for (var i in obj) {
-                    details[i] = details[obj[i]] || obj[i];
-                    delete details[obj[i]];
-                }
-                f.apply(page, [details, networkRequest]);
-                return networkRequest.ret;
-            }, {urls : ["http://*/*", "https://*/*"]}, ["requestHeaders"]);
-        },
-        "disconnect": function(f){
-            chrome.webRequest.onBeforeSendHeaders.removeListener(page.onResourceRequested);
-        }
-    };
-
-    this.resourceReceived = {
-        "connect" : function(f){
-            var obj = {'id' : 'requestId',  'headers': 'responseHeaders', 'contentType': 'type',
-                'status': 'statusCode', 'statusText': 'statusLine'};
-            var networkRequest = {
-                    "ret" : {},
-                    "abort": function () {
-                            this.ret.cancel = true;
-                    },
-                    "changeUrl" : function (newUrl) {
-                            this.ret.redirectUrl = newUrl;
-                    }
-            };
-            page.onResourceReceivedStart = function onResourceReceivedStart(details) {
-                obj.time = new Date(details.timeStamp);
-                obj.stage = 'start';
-                for (var i in obj) {
-                    details[i] = details[obj[i]];
-                    delete details[obj[i]];
-                }
-                f.apply(page, [details, networkRequest]);
-                return networkRequest.ret;
-            };
-            
-            page.onResourceReceivedEnd = function onResourceReceivedEnd(details) {
-                obj.time = new Date(details.timeStamp);
-                obj.stage = 'end';
-                for (var i in obj) {
-                    details[i] = details[obj[i]];
-                    delete details[obj[i]];
-                }
-                f.apply(page, [details, networkRequest]);
-                return networkRequest.ret;
-            };
-            
-            chrome.webRequest.onHeadersReceived.addListener( page.onResourceReceivedStart,
-                {urls : ["http://*/*", "https://*/*"]}, 
-                ["responseHeaders"]
-            );
-            chrome.webRequest.onCompleted.addListener( page.onResourceReceivedEnd,
-                {urls : ["http://*/*", "https://*/*"]}, 
-                ["responseHeaders"]
-            );
-        },
-        "disconnect": function(f){
-            chrome.webRequest.onHeadersReceived.removeListener(page.onResourceReceivedStart);
-            chrome.webRequest.onCompleted.removeListener(page.onResourceReceivedEnd);
-        }
-    };
-    
-    this.resourceTimeout = {
-        "connect": function(f){
-            // TODO
-        },
-        "disconnect": function(f){
-            // TODO
-        }
-    };
-    
-    this.urlChanged = {
-        "connect" : function(f){
-            chrome.tabs.onUpdated.addListener(function onUrlChanged (tabId, changeInfo, tab) {
-                if (tab.id !== page.id) return;
-                if (changeInfo.url && tab.url !== "about:blank") {
-                    f.apply(page,[]);
-                }
-            });
-        },
-        "disconnect": function(f){
-            chrome.tabs.onUpdated.removeListener(page.onUrlChanged);
-        }
-    };
-};
-
-Page.prototype._appendScriptElement = function _appendScriptElement(scriptUrl) {
-    var src = "var el = document.createElement('script');" +
-        "el.onload = function() { alert('" + scriptUrl + "'); };" +
-        "el.src = '" + scriptUrl + "';" +
-        "document.body.appendChild(el);";
-    this.evaluateJavaScript(src);
-};
-/**
- * Add a Cookie to the page. If the domain does not match the current page, 
- * the Cookie will be ignored/rejected. Returns true if successfully added, 
- * otherwise false.
- * 
- * {
- *  'name'     : 'Valid-Cookie-Name',   // required property
- *  'value'    : 'Valid-Cookie-Value',  // required property
- *  'domain'   : 'localhost',
- *  'path'     : '/foo',                // required property
- *  'httponly' : true,
- *  'secure'   : false,
- *  'expires'  : (new Date()).getTime() + (1000 * 60 * 60)   // <-- expires in 1 hour
- * }
- *
- * @param  String  cookie     cookie
- * @return Page
- */
-Page.prototype.addCookie = function addCookie(cookie) {
-    chrome.cookies.set(cookie, function (){});
-    return this;
-};
-
-/**
- * Get Number of Frames 
- *
- * @return Number
- */
-Page.prototype.childFramesCount = function childFramesCount() {
-    return this.framesCount;
-};
-
-/**
- * Get Array of Frames Names
- *
- * @return Array
- */
-Page.prototype.childFramesName = function childFramesName() {
-    return this.framesName;
-};
-
-/**
- * Delete all Cookies visible to the current URL.
- *
- * @return Page
- */
-Page.prototype.clearCookies = function clearCookies() {
-    function extrapolateUrlFromCookie(cookie) {
-        var prefix = cookie.secure ? "https://" : "http://";
-        if (cookie.domain.charAt(0) == ".") {
-            prefix += "www";
-        }
-        return prefix + cookie.domain + cookie.path;
-    }
-    chrome.cookies.getAll({}, function (cookies){
-        [].forEach.call(cookies,function(cookie){
-            var detail = {"url":extrapolateUrlFromCookie(cookie),"name":cookie.name};
-            chrome.cookies.remove(detail, function (){});
-        });
-    });
-};
-
-/**
- * Close the page and releases the memory heap associated with it. Do not use the page instance after calling this.
- *
- * @return null
- */
- Page.prototype.close = function close() {
-    chrome.tabs.remove(page.tab.id);
-};
-
-/**
- * Get Frame Name
- *
- * @return String
- */
-Page.prototype.currentFrameName = function currentFrameName() {
-    return this.frameName;
-};
-
-/**
- * Delete any Cookies visible to the current URL with a ‘name’ property 
- * matching cookieName. Returns true if successfully deleted, otherwise false.
- *
- * @return Page
- */
-Page.prototype.deleteCookie = function deleteCookie() {
-    chrome.cookies.remove(cookie, function (){});
-    return this;
-};
-
-/**
- * Evaluate a function contained in a string.
- * evaluateJavaScript evaluates the function defined in the string in the
- * context of the web page. It is similar to evaluate.
- *
- * @param  String
- * @return Page
- */
-Page.prototype.evaluateJavaScript = function evaluateJavaScript(code, callback){
-    var page = this;
-    code = code.substring(20,code.length-7) + ";return null})()";
-    //code = '(' + code.substring(0,code.length-3) + '})()';
-    //code = "(" + code.replace(/;$/, '') + ")()";
-    //code = code.replace(/;$/, '');
-    console.log(code);
-//    console.log(page.allFrames+'  '+page.id);
-    chrome.tabs.executeScript (page.id,{"code":code,"allFrames":page.allFrames},function(rets){
-        console.log('resultat '+ chrome.extension.lastError+"  "+JSON.stringify(rets));
-        if (chrome.extension.lastError) {
-            console.error(chrome.extension.lastError);
-        }
-        if (typeof (callback) === "function") {
-            callback(rets);
-        }else{
-            //alert(rets);
-        }
-    });
-    return {errors:[]};
-};
-
-/**
- * Get And Display Page
- *
- * @param  String   Name
- * @return Page
- */
-Page.prototype.getPage = function getPage(name) {
-    var _self = this;
-    chrome.tabs.query({},function (tabs){
-        [].forEach.call(tabs,function(tab){
-            //_self.evaluateJavascript(
-            chrome.tabs.executeScript (tab.id,{"code":"window.name"},function(ret){
-                if (name == ret){
-                    page.tab = tab;
-                    chrome.tabs.update(tab.id, {active:true,selected:true});
-                }
-            });
-            chrome.tabs.executeScript (tab.id,{"code":"document.title"},function(ret){
-                if( name == ret){
-                    page.tab = tab;
-                    chrome.tabs.update(tab.id, {active:true,selected:true});
-                }
-            });
-        });
-    });
-    //return Page;
-};
-
-/**
- * Go Back from Navigation
- *
- * @return Page
- */
-Page.prototype.goBack = function goBack() {
-    var page = this;
-    page.evaluate(function(){
-        history.back();return true;
-    });
-};
-
-/**
- * Go Forward from Navigation
- *
- * @return Page
- */
-Page.prototype.goForward = function goForward() {
-    var page = this;
-    page.evaluate(function(){
-        history.forward();return 1;
-    });
-    return this;
-};
-
-/**
- * Go from Navigation
- *
- * @param  Number position     Positive or negated number
- * @return Page
- */
-Page.prototype.go = function go() {
-    var page = this;
-    page.evaluate(function(position){
-        history.go(position);return true;
-    },pos);
-    return this;
-};
-
-/**
- * Injects external script code from the specified file into the page 
- * (like page.includeJs, except that the file does not need to be accessible from the hosted page).
- * 
- * If the file cannot be found in the current directory, libraryPath is used for additional look up.
- *
- * @param scriptUrl URL to the Script to include
- * @return Boolean
- */
-Page.prototype.injectJs = function injectJs(scriptUrl) {
-    var page = this;
-    chrome.tabs.executeScript ({"file":scriptUrl,"allFrames":page.allFrames},function(rets){
-    });
-    return true;
-};
-
-/**
- * Injects external script code from the specified file into the page 
- * (like page.includeJs, except that the file does not need to be accessible from the hosted page).
- * 
- * If the file cannot be found in the current directory, libraryPath is used for additional look up.
- *
- * @param scriptUrl URL to the Script to include
- * @return Boolean
- */
-Page.prototype.openUrl = function openUrl(url, httpConf, settings) {
-    var _self = this;
-    function waitUntilTabCreated (_self){
-        if (_self.tab === null){
-            setTimeout(waitUntilTabCreated, 100, _self);
-        } else {
-                chrome.tabs.update(_self.tab.id, {"url":url,"active":true});
-        }
-    }
-    setTimeout(waitUntilTabCreated, 100, _self);
-    return _self;
-};
-
-/**
- * Reload (Navigation)
- *
- * @return Page
- */
-Page.prototype.reload = function reload() {
-    chrome.tabs.reload();
-    return this;
-};
-
-
-/**
- * Renders the web page to an image buffer and saves it as the specified filename.
- * Currently, the output format is automatically set based on the file extension.
- *
- * @param String filename
- * @param Object options {format, quality}
- * @return Page
- */
-Page.prototype.render = function render(filename, options) {
-    options = options || {};
-    chrome.tabs.captureVisibleTab(options, function(dataUrl){
-        try {
-            chrome.downloads.download({"url":dataUrl,"filename":filename});
-        } catch(e){ console.log(e);}
-    });
-    return this;
-};
-
-/**   ASYNC
- * Renders the web page to an image buffer and returns the result as a
- * Base64-encoded string representation of that image.
- *
- * @param Object options {format, quality}
- * @return Page
- */
-Page.prototype.renderBase64 = function renderBase64(options) {
-    options = options || {};
-    chrome.tabs.captureVisibleTab(options, function(dataUrl){
-        return dataUrl;
-    });
-    return this;
-};
-
-/**   ASYNC
- * Renders the web page to an image buffer which can be sent directly 
- * to a client (e.g. using the webserve module)
- *
- * @param Object options {format, quality}
- * @return Page
- */
-Page.prototype.renderBuffer = function renderBuffer(options) {
-    options = options || {};
-    chrome.tabs.captureVisibleTab(options, function(dataUrl){
-        return dataUrl;
-    });
-    return this;
-};
-
-/**
- * Sends an event to the web page.
- * The events are not synthetic DOM events, each event is sent to the
- * web page as if it comes as part of user interaction.
- *
- * @param Object options {format, quality}
- * @return Page
- */
-Page.prototype.sendEvent = function sendEvent() {
-    var page = this;
-    var args = arguments.length === 1 ? [arguments[0]] : Array.apply(null, arguments);
-    var mouseEvents = ['mouseup', 'mousedown', 'mousemove', 'doubleclick', 'click'];
-    if (mouseEvents.indexOf(args[0]) !== -1) {
-        var mouseX = 0, mouseY = 0, button = 'left';
-        var codesButton = {'left': 0, 'right': 2, 'middle': 1};
-        var codeButton = 0;
-        if ((args.length === 2) && (Object.keys(codesButton).indexOf(args[1]) !== -1)) {
-            button = args[1];
-        } else if ((args.length === 4) && (Object.keys(codesButton).indexOf(args[3]) !== -1))  {
-            button = args[3];
-        }
-        codeButton = codesButton[button];
-        
-        if (args.length >= 3) {
-            mouseX = parseInt(args[1], 10) || 1;
-            mouseY = parseInt(args[2], 10) || 1;
-        } 
-
-        page.evaluate(function(mouseEventType, mouseX, mouseY, button){
-            try {
-                var evt = document.createEvent("MouseEvents");
-                var elm = document.elementFromPoint(parseInt(mouseX,10), parseInt(mouseY,10));
-                evt.initMouseEvent(mouseEventType, true, true, window, 1, 1, 1, 1, 1, false, false, false, false, button, elm);
-                elm.dispatchEvent(evt);
-                return true;
-            } catch (e) {
-                console.log("Failed dispatching " + mouseEventType + ": " + e, "error");
-                return false;
-            }
-        }, args[0], mouseX, mouseY, codeButton);
-    }
-};
-
-/**
- * Allows to set both page.content and page.url properties.
- * The webpage will be reloaded with the new content and the current 
- * location set as the given url, without any actual http request being made.
- *
- * @param String content 
- * @param String url 
- * @return Page
- */
-Page.prototype.setContent = function setContent(content, url) {
-    this.url = url;
-    this.content = content;
-};
-
-/**
- * Stop
- *
- * @return Page
- */
-Page.prototype.stop = function stop() {
-    return this;
-};
-
-/**
- * Stop
- *
- * @return Page
- */
-Page.prototype.stop = function stop() {
-    return this;
-};
-
-/**
- * switchToFrame
- * 
- * @param String url 
- * @return Page
- */
-Page.prototype.switchToChildFrame = function switchToChildFrame(nameOrPosition){
-    page.evaluate(function(nameOrPosition) {
-        window.frames[nameOrPosition].window.phantom = "enable";
-        if (window.phantom) {
-            delete window.phantom;
-        }
-    },nameOrPosition);
-    page.allFrames = true;
-    return this;
-};
-/**
- * switchToFrame
- * 
- * @param String url 
- * @return Page
- */
-Page.prototype.switchToFrame = function switchToFrame(nameOrPosition){
-    page.evaluate(function(nameOrPosition) {
-        if (window.name == nameOrPosition) {
-            window.frames[nameOrPosition].window.phantom = "enable";
-        } else if (window.phantom) {
-            delete window.phantom;
-        }
-    },nameOrPosition);
-    page.allFrames = true;
-    return this;
-};
-
-/**
- * switchToMainFrame
- *
- * @return Page
- */
-Page.prototype.switchToMainFrame = function switchToMainFrame(){
-    page.evaluate(function() {
-        delete window.phantom;
-    });
-    page.allFrames = false;
-    return this;
-};
-
-/**
- * switchToParentFrame
- *
- * @return Page
- */
-Page.prototype.switchToParentFrame = function switchToParentFrame(){
-    page.evaluate(function() {
-        delete window.phantom;
-        window.parent.phantom = "enable";
-    });
-    page.allFrames = true;
-    return this;
-};
-
-
-/**
- * switchToParentFrame
- *
- * @return Page
- */
-Page.prototype.updateProperties = function updateProperties(){
-    var page = this;
-    var retour = null;
-    chrome.tabs.executeScript (page.id, {
-        "code": [ 
-                    "[ window && window.name || 'noname'",
-                    "location.href",
-                    "document.title",
-                    " document.body.innerHTML",
-                    "document.body.textContent || document.body.innerText || ''",
-                    "[].map.call(window.frames || [],function(elm){return elm.name;})]"
-                ].join(','),
-        "allFrames":page.allFrames,
-        "runAt": "document_end"
-        }, function(ret) {
-            if (typeof ret == "undefined"|| ret[0] === null) return;
-            ret = ret[0];
-            retour = ret;
-
-            if (!page.allFrames) {
-                page.windowName = ret[0];
-                page.url = ret[1];
-                page.title = ret[2];
-                page.content = ret[3];
-                page.plainText = ret[4];
-            } else if (window.phantom) {
-                page.frameName = ret[0];
-                page.frameUrl = ret[1];
-                page.frameTitle = ret[2];
-                page.frameContent = ret[3];
-                page.framePlainText = ret[4];
-            }
-            page.framesCount = ret[5].length;
-            page.framesName = ret[5];
-        }
-    );
-};
-// END DEFINE PAGE
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action && request.action === "send_script" && request.script ){

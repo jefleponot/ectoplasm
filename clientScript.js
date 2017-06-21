@@ -10,7 +10,7 @@ window.callPhantom = function(data){
 };
 
 window.addEventListener('error', function(event) {
-    chrome.runtime.sendMessage({type: "error","message": event.error.message,"trace":event.error});
+    chrome.runtime.sendMessage({type: "error","message": event.message || event.error , "trace":event.error});
 }, false);
 
 console.log = (function(fct){ 

@@ -266,3 +266,100 @@ exports.split = function (path) {
         // And split
         .split("/")
 };
+
+exports.pathJoin = function () {
+    var args = [].slice.call(arguments,0);
+    return args.join('/');
+};
+
+exports.fromNativeSeparators = function fromNativeSeparators(path){ return path;};
+exports.separator = '/';
+exports.workingDirectory = '';
+
+exports.absolute = function absolute(p) {
+    var t = p.split('/');
+    var r = [];
+    var c = false;
+    for(var i = t.length; i > 0 ; i--) {
+        if (t[i-1] === '..') {
+            c = true;
+        } else if (t[i-1] !== '.') {
+            if (c) {
+                c = false
+            } else {
+                r.unshift(t[i-1])
+            }  
+        }
+    }
+    return r.join('/');
+};
+
+exports.changeWorkingDirectory = function absolute(path){ return path;};
+exports.isAbsolute = function isAbsolute(path){ return true;};
+exports.isDirectory = function isDirectory(path){ return true;};
+exports.isExecutable = function isExecutable(path){ return true;};
+
+exports.isLink = function isLink(path){ return true;};
+exports.isReadable = function isReadable(path){ return true;};
+exports.isWritable = function isWritable(path){ return true;};
+exports.lastModified = function lastModified(path){ return true;};
+exports.list = function list(path){ return [];};
+exports.makeDirectory = function list(path){ return [];};
+exports.makeTree = function list(path){ return [];};
+//exports.copyTree
+//exports.copy
+// exports.move = function (path){ return [];};
+// exports.open
+// exports.readLink
+// exports.read
+// exports.removeDirectory
+// exports.removeTree  = function removeTree(path){ return [];};
+// exports.remove
+// exports.size
+// exports.touch
+// exports.write 
+
+
+exports.exists = function exists(path) {
+//    console.log("exists == "+path);
+    try {
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", chrome.extension.getURL(path), false);
+        xhr.send(null);
+        if (xhr.status === 200 && xhr.readyState === 4) {
+            return true;
+        }
+    } catch(e) {}
+    return false;
+};
+
+exports.isFile = exports.exists;
+exports._open = function _open(filename) { 
+//    console.log("open =="+filename);
+    return {
+        "read": function read() {
+//            console.log(" read =="+filename);
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", chrome.extension.getURL(filename), false);
+            xhr.send(null);
+            if (xhr.status === 200 && xhr.readyState === 4) {
+                return xhr.responseText;
+            } 
+            return "";
+        },
+        "write": function() {
+//            console.log(" write =="+filename);
+        },
+        "close": function() {
+//            console.log(" close =="+filename);
+        }
+    }
+};
+
+exports.close = function close(path){ return this;};
+exports._size = function _size(path){ return 0;};
+exports._copy = function _copy(path){ return true;};
+exports._copyTree = function _copyTree(path){ return true;};
+exports._remove = function _remove(path){ return true;};
+exports._removeDirectory = function _removeDirectory(path){ return true;};
+exports._removeTree = function _removeTree(path){ return true;};
