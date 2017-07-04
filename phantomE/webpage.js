@@ -38,7 +38,7 @@
 function runCB(page, callback, params) {
     if (typeof page[callback] === "function"){
             console.log('runCB : '+ callback);
-            console.log(page.title);
+            //console.log(page.title);
             return page[callback].apply(page,params);
     }
     return null;
@@ -164,12 +164,12 @@ function eventsPage(page) {
 
             chrome.tabs.executeScript (tab.id,{"code":"window.frames.length"},function(ret){
                 page.framesCount = ret;
-                console.log(page.framesCount);
+                //console.log(page.framesCount);
                     
                 
                 chrome.webNavigation.getAllFrames({tabId: page.id}, function logFrameInfo(framesInfo) {
                     for (var i = 0; i < framesInfo.length; i++) {
-                        console.log("\u001b[31;32m==>"+JSON.stringify(framesInfo[i])+"\u001b[0m");
+                        //console.log("\u001b[31;32m==>"+JSON.stringify(framesInfo[i])+"\u001b[0m");
                     }
                 });
                 
@@ -177,11 +177,11 @@ function eventsPage(page) {
                     chrome.tabs.executeScript (tab.id,{"code":"[].map.call(window.frames,function(elm){return elm.name;})"},function(ret){
                             page.framesName = ret;
                             console.log(page.framesName);
-                            //runCB(page, '_onPageOpenFinished', ['success']);
+                            runCB(page, '_onPageOpenFinished', ['success']);
                             runCB(page, 'onLoadFinished', ['success']);
                     });
                 } else {
-                    //runCB(page, '_onPageOpenFinished', ['success']);
+                    runCB(page, '_onPageOpenFinished', ['success']);
                     runCB(page, 'onLoadFinished', ['success']);
                 }
             });
@@ -264,16 +264,13 @@ Page.prototype.evaluate = function evaluate(func, args) {
         throw "Wrong use of WebPage#evaluate";
     }
     //str = 'function() { return (' + func.toString() + ')(';
-    console.log(func.toString().replace(/[ ]+/g,' ').replace(/\n/g,""));
+    //console.log(func.toString().replace(/[ ]+/g,' ').replace(/\n/g,""));
     var strFunc = func.toString().replace(/[ ]+/g,' ').replace(/\n/g,"");
     if (strFunc === "function _evaluate() { return document.location.href; }") {
-        
-        console.log('                    xx                                ');
         return self.title;
     }
     
     if (strFunc === "function _evaluate() { return document.title; }") {
-        console.log('                    TT                                ');
         return self.url;
     }
     
@@ -351,6 +348,69 @@ Page.prototype.injectJs = function injectJs(scriptUrl) {
     chrome.tabs.executeScript ({"file":scriptUrl,"allFrames":self.allFrames},function(rets){
     });
     return true;
+};
+
+/**
+ * Injects external script code from the specified file into the page 
+ * (like page.includeJs, except that the file does not need to be accessible from the hosted page).
+ * 
+ * If the file cannot be found in the current directory, libraryPath is used for additional look up.
+ *
+ * @param scriptUrl URL to the Script to include
+ * @return Boolean
+ */
+Page.prototype.open = function (url, arg1, arg2, arg3, arg4) {
+    var thisPage = this;
+
+    if (arguments.length === 1) {
+        this.openUrl(url, 'get', this.settings);
+        return;
+    } else if (arguments.length === 2 && typeof arg1 === 'function') {
+        this._onPageOpenFinished = function() {
+            thisPage._onPageOpenFinished = null; //< Disconnect callback (should fire only once)
+            arg1.apply(thisPage, arguments);     //< Invoke the actual callback
+        }
+        this.openUrl(url, 'get', this.settings);
+        return;
+    } else if (arguments.length === 2) {
+        this.openUrl(url, arg1, this.settings);
+        return;
+    } else if (arguments.length === 3 && typeof arg2 === 'function') {
+        this._onPageOpenFinished = function() {
+            thisPage._onPageOpenFinished = null; //< Disconnect callback (should fire only once)
+            arg2.apply(thisPage, arguments);     //< Invoke the actual callback
+        }
+        this.openUrl(url, arg1, this.settings);
+        return;
+    } else if (arguments.length === 3) {
+        this.openUrl(url, {
+            operation: arg1,
+            data: arg2
+        }, this.settings);
+        return;
+    } else if (arguments.length === 4) {
+        this._onPageOpenFinished = function() {
+            thisPage._onPageOpenFinished = null; //< Disconnect callback (should fire only once)
+            arg3.apply(thisPage, arguments);     //< Invoke the actual callback
+        }
+        this.openUrl(url, {
+            operation: arg1,
+            data: arg2
+        }, this.settings);
+        return;
+    } else if (arguments.length === 5) {
+        this._onPageOpenFinished = function() {
+            thisPage._onPageOpenFinished = null; //< Disconnect callback (should fire only once)
+            arg4.apply(thisPage, arguments);     //< Invoke the actual callback
+        }
+        this.openUrl(url, {
+            operation: arg1,
+            data: arg2,
+            headers : arg3
+        }, this.settings);
+        return;
+    }
+    throw "Wrong use of WebPage#open";
 };
 
 /**

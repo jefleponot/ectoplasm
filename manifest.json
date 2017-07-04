@@ -19,20 +19,21 @@
 
   "permissions": [
     "activeTab",
-    "storage",
-    "tabs",
     "background",
+    "contextMenus",
+    "cookies",
+    "debugger",
+    "downloads", 
     "http://*/*",
     "https://*/*",
-    "*://*/*",
-    "cookies",
-    "downloads", 
-    "contextMenus", 
-    "debugger", 
+    "processes",
+    "storage",
+    "tabs",
     "webNavigation",
     "webRequest",
     "webRequestBlocking",
-    "<all_urls>"
+    "<all_urls>",
+    "*://*/*"
   ],
 
   "browser_action": {

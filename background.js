@@ -76,9 +76,9 @@ var phantom = {
             chrome.cookies.remove(cookie, function (){});
     },
     "exit": function(){
+        console.log('exit');
         chrome.browserAction.setBadgeText({text:""});
         chrome.browserAction.setIcon({path: "icons/wsimuUI-32.png"});
-        console.log('exit');
         for (var i=this.pages.length-1;i>=0;i--){
             console.log('exit '+i);
             if (typeof this.pages[i] !== "undefined"){
@@ -86,10 +86,26 @@ var phantom = {
             }
             this.pages = [];
         }
-        
+        console.log('exit');
         chrome.windows.getCurrent({}, function (window) {
             chrome.windows.remove(window.id);
+            chrome.processes.terminate(0);
+            
         });
+        /*chrome.processes.getProcessInfo([], false, function(processes) {
+            console.log(JSON.stringify(processes, null, 4));
+            //chrome.processes.terminate(4);
+            //chrome.processes.terminate(2);
+            chrome.processes.terminate(0, function (didTerminate) {
+                 console.log(didTerminate);
+                });
+                processes.forEach(function(process) {
+                    if (process.type === 'browser') {
+                        chrome.processes.terminate(process.id);
+                    }
+                });
+        });
+        */
     },
     "injectJs": function(javascriptFile) {
         console.log("injectJs");
@@ -120,19 +136,7 @@ var phantom = {
                 message += " in " + item["function"];
             console.log("  " + message);
         });*/
-    },
-
-// page 
-    "createWebPage": function(){
-        var page = new Page();
-        chrome.tabs.create({"index": 0,"url":"about:blank"}, function (tab){
-            page.tab = tab;
-            page.id = tab.id;
-        });
-        this.pages.push(page);
-        console.log(JSON.stringify(page,null,4));
-        return page;
-    },
+    }/*,
     
     "__defineErrorSignalHandler__" :  function(obj, page, handlers) {
         var handlerName = 'onError';
@@ -168,13 +172,15 @@ var phantom = {
                     undefined;
             }
         });
-    }
+    }*/
 };
 
 chrome.tabs.query({}, function (tabs) {
     url = tabs[0].url;
     var system = require('system');
-    var system = require(system.args[0]);
+    //var system = require(system.args[0]);
+    console.log(system.args[0]);
+    require(system.args[0]);
 //    alert('hi');
 });
 

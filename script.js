@@ -3,14 +3,16 @@ var page = require('webpage').create();
 var url = 'http://phantomjs.org/';
 page.open(url, function (status) {
   //Page is loaded!
+  console.log("phantomjs OK");
   setTimeout(function(){
     page.open('http://casperjs.org', function (status) {
+      console.log("casperjs OK");
       //Page is loaded!
       setTimeout(function(){
 
        phantom.exit();
-      },5000);
+      },2000);
     });
-  },5000);
+  },2000);
 });
       

@@ -4,7 +4,7 @@ casper.start();
 
 casper.thenOpen('http://casperjs.org/',function(){
    console.log('chargement ok');
-   this.capture('casper.png');
+   //this.capture('casper.png');
 });
 
 casper.then(function() {
@@ -13,7 +13,7 @@ casper.then(function() {
 
 casper.thenOpen('http://phantomjs.org', function() {
     this.echo('Second Page: ' + this.getTitle());
-    this.capture('phantomjs.png');
+    //this.capture('phantomjs.png');
 });
 
 casper.thenClick('a[href="http://phantomjs.org/download.html"]', function(){
